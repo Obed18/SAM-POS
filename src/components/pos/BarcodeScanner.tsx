@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Quagga from "@ericblade/quagga2";
-import "../../styles/BarcodeScannerModal.css";
+import "./BarcodeScannerModal.css";
 
 interface Props {
   isOpen: boolean;
