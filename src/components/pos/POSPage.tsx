@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import BarcodeScanner from './BarcodeScanner';
 import { useAppContext } from '@/contexts/AppContext';
 import { categories } from '@/data/mockData';
@@ -42,6 +42,18 @@ const POSPage: React.FC = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
   const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+  if (scanning) {
+    document.body.style.overflow = "hidden";
+  } else {
+    document.body.style.overflow = "auto";
+  }
+
+  return () => {
+    document.body.style.overflow = "auto";
+  };
+}, [scanning]);
 
   const filteredProducts = useMemo(() => {
     return productList.filter((p) => {
@@ -154,25 +166,15 @@ const POSPage: React.FC = () => {
           </div>
         </div>
 
-        {scanning && (
-  <div className="mb-4 relative">
-    <BarcodeScanner
-      onDetected={(code) => {
-        handleDetected(code);
-        setScanning(false); // auto close after scan
-      }}
-    />
-
-    {/* Close button */}
-    <button
-      onClick={() => setScanning(false)}
-      className="absolute top-2 right-2 bg-white rounded-full p-2 shadow"
-    >
-      <X className="w-4 h-4" />
-    </button>
-  </div>
-)}
-
+          {scanning && (
+            <BarcodeScanner
+              onDetected={(code) => {
+                handleDetected(code);
+                setScanning(false);
+              }}
+              onClose={() => setScanning(false)}
+            />
+          )}
         {/* Categories */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
           {categories.map((cat) => (
