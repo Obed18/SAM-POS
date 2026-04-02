@@ -13,7 +13,7 @@ const BarcodeScanner = ({ onDetected }: Props) => {
 
   useEffect(() => {
     // 🔊 preload beep sound
-    beepRef.current = new Audio("/sounds/beep.mp3");
+    beepRef.current = new Audio("/sounds/Beep.mp3");
 
     if (!scannerRef.current) return;
 
