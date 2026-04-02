@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import BarcodeScanner from './BarcodeScanner';
 import { useAppContext } from '@/contexts/AppContext';
 import { categories } from '@/data/mockData';
+import { payWithPaystack } from '@/services/paystack';
 import { Sale } from '@/types';
 import {
   Search,
@@ -85,48 +86,70 @@ const POSPage: React.FC = () => {
   const finalTotal = cartTotal - discount;
   const change = paymentMethod === 'cash' ? Math.max(0, parseFloat(amountReceived || '0') - finalTotal) : 0;
 
-  const handleCompleteSale = () => {
-    if (cart.length === 0) {
-      showToast('error', 'Cart is empty. Add items first.');
-      return;
-    }
-
-    if (paymentMethod === 'cash') {
-      const received = parseFloat(amountReceived || '0');
-      if (received < finalTotal) {
-        showToast('error', 'Insufficient amount received.');
-        return;
-      }
-    }
-
-    const sale: Sale = {
-      id: `s${Date.now()}`,
-      items: [...cart],
-      subtotal: cartSubtotal,
-      tax: cartTax,
-      discount,
-      total: finalTotal,
-      paymentMethod,
-      amountReceived: paymentMethod === 'cash' ? parseFloat(amountReceived || '0') : finalTotal,
-      change,
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    completeSale(sale);
-    setSaleComplete(true);
-    showToast('success', `Sale completed! Total: $${finalTotal.toFixed(2)}`);
-
-    setTimeout(() => {
-      setReceiptSale(sale);
-      setSaleComplete(false);
-      setShowCheckout(false);
-      setAmountReceived('');
-      setDiscount(0);
-    }, 1500);
+  const finalizeSale = (reference?: string) => {
+  const sale: Sale = {
+    id: Date.now().toString(),
+    items: cart,
+    subtotal: cartSubtotal,
+    tax: cartTax,
+    total: finalTotal,
+    paymentMethod,
+    amountReceived: paymentMethod === 'cash' ? parseFloat(amountReceived) : finalTotal,
+    change,
+    reference: reference || null,
+    createdAt: new Date(),
   };
 
-  return (
+  completeSale(sale);
+  setReceiptSale(sale);
+
+  clearCart();
+  setSaleComplete(true);
+  setShowCheckout(false);
+  setAmountReceived('');
+  setDiscount(0);
+
+  showToast('success', 'Sale completed successfully!');
+};
+
+  const handlePaystackPayment = () => {
+  if (cart.length === 0) {
+    showToast('error', 'Cart is empty.');
+    return;
+  }
+
+  payWithPaystack({
+    email: 'customer@email.com', // 🔥 make dynamic later
+    amount: finalTotal,
+
+    onSuccess: (reference) => {
+      finalizeSale(reference);
+    },
+
+    onClose: () => {
+      showToast('info', 'Payment cancelled');
+    },
+  });
+};
+
+
+const handleCompleteSale = () => {
+  if (cart.length === 0) {
+    showToast('error', 'Cart is empty. Add items first.');
+    return;
+  }
+
+  if (paymentMethod === 'cash') {
+    const received = parseFloat(amountReceived || '0');
+    if (received < finalTotal) {
+      showToast('error', 'Insufficient amount received.');
+      return;
+    }
+  }
+
+  finalizeSale(); // no reference for cash
+};
+return (
     <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-7rem)]">
       {/* LEFT: Product Grid */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -247,10 +270,10 @@ const POSPage: React.FC = () => {
       {/* RIGHT: Cart Panel */}
       <div className="w-full lg:w-96 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Cart Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-700 bg-slate-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-slate-700" />
-            <h3 className="text-base font-semibold text-slate-800">Current Order</h3>
+            <ShoppingCart className="w-5 h-5 text-slate-100" />
+            <h3 className="text-base font-semibold text-slate-100">Current Order</h3>
             {cart.length > 0 && (
               <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
                 {cart.reduce((s, i) => s + i.quantity, 0)}
@@ -459,25 +482,26 @@ const POSPage: React.FC = () => {
           </button>
 
           {/* KEEP BUTTON SAME */}
-          <button
-            onClick={handleCompleteSale}
-            disabled={saleComplete}
-            className={`flex-1 py-3 font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${
-              saleComplete
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
-            }`}
-          >
-            {saleComplete ? (
-              <>
-                <CheckCircle className="w-5 h-5" />
-                Done!
-              </>
-            ) : (
-              'Complete Sale'
-            )}
-          </button>
-        </div>
+
+          
+  {paymentMethod === 'cash' ? (
+    <button
+      onClick={handleCompleteSale}
+      disabled={saleComplete}
+      className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl"
+    >
+      Complete Sale
+    </button>
+  ) : (
+    <button
+      onClick={handlePaystackPayment}
+      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+    >
+      <CreditCard className="w-4 h-4" />
+      Proceed to Pay
+    </button>
+  )}
+</div>      
       </>
     )}
   </div>
