@@ -9,8 +9,12 @@ interface Props {
 
 const BarcodeScanner = ({ onDetected, onClose }: Props) => {
   const scannerRef = useRef<HTMLDivElement>(null);
+  const beepAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    beepAudioRef.current = new Audio("/sound/Beep.mp3");
+    beepAudioRef.current.load();
+
     if (!scannerRef.current) return;
 
     Quagga.init(
@@ -40,6 +44,16 @@ const BarcodeScanner = ({ onDetected, onClose }: Props) => {
     const onDetectedHandler = (data: QuaggaJSResultObject) => {
       const code = data.codeResult?.code;
       if (code) {
+        const beep = beepAudioRef.current;
+        if (beep) {
+          const playPromise = beep.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((err) => {
+              console.warn("Beep play failed:", err);
+            });
+          }
+        }
+
         onDetected(code);
         onClose(); // auto close on success (optional)
       }
@@ -50,6 +64,10 @@ const BarcodeScanner = ({ onDetected, onClose }: Props) => {
     return () => {
       Quagga.offDetected(onDetectedHandler);
       Quagga.stop();
+      if (beepAudioRef.current) {
+        beepAudioRef.current.pause();
+        beepAudioRef.current.currentTime = 0;
+      }
     };
   }, [onDetected, onClose]);
 
