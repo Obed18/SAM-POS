@@ -338,136 +338,150 @@ const POSPage: React.FC = () => {
     ))
   )}
 </div>
-        {/* Checkout Section */}
-        {cart.length > 0 && (
-          <div className="border-t border-slate-100 p-5 space-y-4">
-            {!showCheckout ? (
-              <>
-                {/* Summary */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Subtotal</span>
-                    <span>${cartSubtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-slate-500">
-                    <span>Tax (8%)</span>
-                    <span>${cartTax.toFixed(2)}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div className="flex justify-between text-sm text-emerald-600">
-                      <span>Discount</span>
-                      <span>-${discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-lg font-bold text-slate-800 pt-2 border-t border-slate-100">
-                    <span>Total</span>
-                    <span>${finalTotal.toFixed(2)}</span>
-                  </div>
-                </div>
+{/* Checkout Section */}
+{cart.length > 0 && (
+  <div className="border-t border-slate-700 bg-slate-900 p-5 space-y-4">
+    {!showCheckout ? (
+      <>
+        {/* Summary */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm text-slate-400">
+            <span>Subtotal</span>
+            <span>${cartSubtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-slate-400">
+            <span>Tax (8%)</span>
+            <span>${cartTax.toFixed(2)}</span>
+          </div>
 
-                {/* Discount Input */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    placeholder="Discount ($)"
-                    value={discount || ''}
-                    onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
-                    className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-400">
+              <span>Discount</span>
+              <span>-${discount.toFixed(2)}</span>
+            </div>
+          )}
 
+          <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-slate-700">
+            <span>Total</span>
+            <span>${finalTotal.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Discount Input */}
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            placeholder="Discount ($)"
+            value={discount || ''}
+            onChange={(e) =>
+              setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
+            }
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-600 text-sm bg-slate-800 text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          />
+        </div>
+
+        {/* KEEP BUTTON SAME */}
+        <button
+          onClick={() => setShowCheckout(true)}
+          className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25 text-sm"
+        >
+          Proceed to Checkout
+        </button>
+      </>
+    ) : (
+      <>
+        {/* Payment Method */}
+        <div>
+          <p className="text-sm font-medium text-slate-200 mb-2">
+            Payment Method
+          </p>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: 'cash' as const, label: 'Cash', icon: Banknote },
+              { id: 'card' as const, label: 'Card', icon: CreditCard },
+              { id: 'mobile' as const, label: 'Mobile', icon: Smartphone },
+            ].map((method) => {
+              const Icon = method.icon;
+              return (
                 <button
-                  onClick={() => setShowCheckout(true)}
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25 text-sm"
+                  key={method.id}
+                  onClick={() => setPaymentMethod(method.id)}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-sm font-medium ${
+                    paymentMethod === method.id
+                      ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400'
+                      : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
                 >
-                  Proceed to Checkout
+                  <Icon className="w-5 h-5" />
+                  {method.label}
                 </button>
-              </>
-            ) : (
-              <>
-                {/* Payment Method */}
-                <div>
-                  <p className="text-sm font-medium text-slate-700 mb-2">Payment Method</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'cash' as const, label: 'Cash', icon: Banknote },
-                      { id: 'card' as const, label: 'Card', icon: CreditCard },
-                      { id: 'mobile' as const, label: 'Mobile', icon: Smartphone },
-                    ].map((method) => {
-                      const Icon = method.icon;
-                      return (
-                        <button
-                          key={method.id}
-                          onClick={() => setPaymentMethod(method.id)}
-                          className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-sm font-medium ${
-                            paymentMethod === method.id
-                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                          }`}
-                        >
-                          <Icon className="w-5 h-5" />
-                          {method.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+              );
+            })}
+          </div>
+        </div>
 
-                {/* Cash Input */}
-                {paymentMethod === 'cash' && (
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 mb-1.5">Amount Received</p>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={amountReceived}
-                      onChange={(e) => setAmountReceived(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-lg font-bold text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    />
-                    {parseFloat(amountReceived || '0') >= finalTotal && (
-                      <p className="text-sm text-emerald-600 font-medium mt-1.5">
-                        Change: ${change.toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                )}
+        {/* Cash Input */}
+        {paymentMethod === 'cash' && (
+          <div>
+            <p className="text-sm font-medium text-slate-200 mb-1.5">
+              Amount Received
+            </p>
 
-                {/* Total */}
-                <div className="bg-slate-800 text-white rounded-xl p-4 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Total Amount</p>
-                  <p className="text-2xl font-bold">${finalTotal.toFixed(2)}</p>
-                </div>
+            <input
+              type="number"
+              placeholder="0.00"
+              value={amountReceived}
+              onChange={(e) => setAmountReceived(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-600 text-lg font-bold text-white bg-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowCheckout(false)}
-                    className="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors text-sm"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleCompleteSale}
-                    disabled={saleComplete}
-                    className={`flex-1 py-3 font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${
-                      saleComplete
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
-                    }`}
-                  >
-                    {saleComplete ? (
-                      <>
-                        <CheckCircle className="w-5 h-5" />
-                        Done!
-                      </>
-                    ) : (
-                      'Complete Sale'
-                    )}
-                  </button>
-                </div>
-              </>
+            {parseFloat(amountReceived || '0') >= finalTotal && (
+              <p className="text-sm text-emerald-400 font-medium mt-1.5">
+                Change: ${change.toFixed(2)}
+              </p>
             )}
           </div>
         )}
+
+        {/* Total */}
+        <div className="bg-slate-800 text-white rounded-xl p-4 text-center border border-slate-700">
+          <p className="text-xs text-slate-400 mb-1">Total Amount</p>
+          <p className="text-2xl font-bold">${finalTotal.toFixed(2)}</p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCheckout(false)}
+            className="flex-1 py-3 bg-slate-700 text-slate-200 font-medium rounded-xl hover:bg-slate-600 transition-colors text-sm"
+          >
+            Back
+          </button>
+
+          {/* KEEP BUTTON SAME */}
+          <button
+            onClick={handleCompleteSale}
+            disabled={saleComplete}
+            className={`flex-1 py-3 font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${
+              saleComplete
+                ? 'bg-emerald-500 text-white'
+                : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/25'
+            }`}
+          >
+            {saleComplete ? (
+              <>
+                <CheckCircle className="w-5 h-5" />
+                Done!
+              </>
+            ) : (
+              'Complete Sale'
+            )}
+          </button>
+        </div>
+      </>
+    )}
+  </div>
+)}
       </div>
     </div>
   );
