@@ -7,8 +7,14 @@ interface Props {
 
 const BarcodeScanner = ({ onDetected }: Props) => {
   const scannerRef = useRef<HTMLDivElement>(null);
+  const beepRef = useRef<HTMLAudioElement | null>(null);
+  const lastScanned = useRef<string | null>(null);
+  const scanCooldown = useRef(false);
 
   useEffect(() => {
+    // 🔊 preload beep sound
+    beepRef.current = new Audio("/sounds/beep.mp3");
+
     if (!scannerRef.current) return;
 
     Quagga.init(
@@ -19,15 +25,15 @@ const BarcodeScanner = ({ onDetected }: Props) => {
           constraints: {
             width: { min: 640 },
             height: { min: 480 },
-            facingMode: { ideal: "environment" }, // prefer back camera
-          },
-          area: {
-            top: "0%",
-            right: "0%",
-            left: "0%",
-            bottom: "0%",
+            facingMode: { ideal: "environment" },
           },
         },
+        locator: {
+          patchSize: "medium",
+          halfSample: true,
+        },
+        numOfWorkers: navigator.hardwareConcurrency || 4,
+        frequency: 10,
         decoder: {
           readers: ["code_128_reader", "ean_reader", "ean_8_reader"],
         },
@@ -43,9 +49,29 @@ const BarcodeScanner = ({ onDetected }: Props) => {
 
     const onDetectedHandler = (data: any) => {
       const code = data.codeResult?.code;
-      if (code) {
-        onDetected(code);
+
+      // ❗ prevent duplicate spam
+      if (!code || scanCooldown.current) return;
+      if (lastScanned.current === code) return;
+
+      scanCooldown.current = true;
+      lastScanned.current = code;
+
+      // 🔊 PLAY BEEP
+      if (beepRef.current) {
+        beepRef.current.currentTime = 0;
+        beepRef.current.play().catch(() => {});
       }
+
+      // 📳 VIBRATE (mobile)
+      navigator.vibrate?.(150);
+
+      onDetected(code);
+
+      // cooldown
+      setTimeout(() => {
+        scanCooldown.current = false;
+      }, 1200);
     };
 
     Quagga.onDetected(onDetectedHandler);
@@ -57,10 +83,23 @@ const BarcodeScanner = ({ onDetected }: Props) => {
   }, [onDetected]);
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       <div
         ref={scannerRef}
         style={{ width: "100%", height: "300px" }}
+      />
+
+      {/* Optional scan box */}
+      <div
+        style={{
+          position: "absolute",
+          top: "20%",
+          left: "10%",
+          width: "80%",
+          height: "60%",
+          border: "2px solid #00ff99",
+          borderRadius: "12px",
+        }}
       />
     </div>
   );
