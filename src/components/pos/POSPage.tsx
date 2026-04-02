@@ -155,22 +155,22 @@ const POSPage: React.FC = () => {
         </div>
 
         {scanning && (
-          <div className="mb-4 relative">
-            <BarcodeScanner
-              onDetected={(code) => {
-                handleDetected(code);
-                setScanning(false); // auto close after scan
-              }}
-            />
+  <div className="mb-4 relative">
+    <BarcodeScanner
+      onDetected={(code) => {
+        handleDetected(code);
+        setScanning(false); // auto close after scan
+      }}
+    />
 
-            {/* Close button */}
-            <button
-              onClick={() => setScanning(false)}
-              className="absolute top-2 right-2 bg-white rounded-full p-2 shadow"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+    {/* Close button */}
+    <button
+      onClick={() => setScanning(false)}
+      className="absolute top-2 right-2 bg-white rounded-full p-2 shadow"
+    >
+      <X className="w-4 h-4" />
+    </button>
+  </div>
 )}
 
         {/* Categories */}

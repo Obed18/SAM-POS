@@ -1,25 +1,14 @@
 import { useEffect, useRef } from "react";
 import Quagga from "@ericblade/quagga2";
-import "./BarcodeScannerModal.css";
 
 interface Props {
-  isOpen: boolean;
-  onClose: () => void;
   onDetected: (code: string) => void;
 }
 
-const BarcodeScannerModal = ({ isOpen, onClose, onDetected }: Props) => {
+const BarcodeScanner = ({ onDetected }: Props) => {
   const scannerRef = useRef<HTMLDivElement>(null);
-  const beepRef = useRef<HTMLAudioElement | null>(null);
-  const lastScanned = useRef<string | null>(null);
-  const scanCooldown = useRef(false);
 
   useEffect(() => {
-    if (!isOpen) return;
-
-    // 🔊 preload beep sound
-    beepRef.current = new Audio("/sounds/Beep.mp3");
-
     if (!scannerRef.current) return;
 
     Quagga.init(
@@ -30,15 +19,15 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected }: Props) => {
           constraints: {
             width: { min: 640 },
             height: { min: 480 },
-            facingMode: { ideal: "environment" },
+            facingMode: { ideal: "environment" }, // prefer back camera
+          },
+          area: {
+            top: "0%",
+            right: "0%",
+            left: "0%",
+            bottom: "0%",
           },
         },
-        locator: {
-          patchSize: "medium",
-          halfSample: true,
-        },
-        numOfWorkers: navigator.hardwareConcurrency || 4,
-        frequency: 10,
         decoder: {
           readers: ["code_128_reader", "ean_reader", "ean_8_reader"],
         },
@@ -54,26 +43,9 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected }: Props) => {
 
     const onDetectedHandler = (data: any) => {
       const code = data.codeResult?.code;
-
-      if (!code || scanCooldown.current) return;
-      if (lastScanned.current === code) return;
-
-      scanCooldown.current = true;
-      lastScanned.current = code;
-
-      // 🔊 beep
-      if (beepRef.current) {
-        beepRef.current.currentTime = 0;
-        beepRef.current.play().catch(() => {});
+      if (code) {
+        onDetected(code);
       }
-
-      navigator.vibrate?.(150);
-
-      onDetected(code);
-
-      setTimeout(() => {
-        scanCooldown.current = false;
-      }, 1200);
     };
 
     Quagga.onDetected(onDetectedHandler);
@@ -82,29 +54,16 @@ const BarcodeScannerModal = ({ isOpen, onClose, onDetected }: Props) => {
       Quagga.offDetected(onDetectedHandler);
       Quagga.stop();
     };
-  }, [isOpen, onDetected]);
-
-  if (!isOpen) return null;
+  }, [onDetected]);
 
   return (
-    <div className="scanner-overlay">
-      <div className="scanner-modal">
-        {/* Header */}
-        <div className="scanner-header">
-          <h3>Scan Barcode</h3>
-          <button onClick={onClose} className="close-btn">✕</button>
-        </div>
-
-        {/* Scanner */}
-        <div className="scanner-container">
-          <div ref={scannerRef} className="scanner-view" />
-
-          {/* Scan box */}
-          <div className="scan-box" />
-        </div>
-      </div>
+    <div>
+      <div
+        ref={scannerRef}
+        style={{ width: "100%", height: "300px" }}
+      />
     </div>
   );
 };
 
-export default BarcodeScannerModal;
+export default BarcodeScanner;
