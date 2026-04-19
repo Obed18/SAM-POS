@@ -6,7 +6,7 @@ import {
   updateProduct,
   deleteProduct, getCategories, uploadProductImage,
 } from '@/services/dataService';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import Modal from './Modal';
 import {
   Search,

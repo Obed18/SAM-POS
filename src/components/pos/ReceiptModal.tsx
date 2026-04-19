@@ -1,5 +1,5 @@
 import React from 'react';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import Modal from './Modal';
 import { Printer, Zap } from 'lucide-react';
 

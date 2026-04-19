@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { Eye, EyeOff, Zap, Loader2 } from 'lucide-react';
 
 const LoginPage: React.FC = () => {

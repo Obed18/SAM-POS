@@ -1,5 +1,5 @@
 import React from 'react';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { PageType } from '@/types';
 import {
   LayoutDashboard,

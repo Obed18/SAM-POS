@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { purchaseHistory } from '@/data/mockData';
 import { Customer } from '@/types';
 import Modal from './Modal';

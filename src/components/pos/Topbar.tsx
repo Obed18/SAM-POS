@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import useAppContext from '@/hooks/useAppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { Bell, Search, Menu, User, ChevronDown, Settings, HelpCircle, Database } from 'lucide-react';
 
 
