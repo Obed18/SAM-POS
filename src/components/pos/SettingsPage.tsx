@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import Modal from './Modal';
 import {
@@ -9,6 +9,8 @@ import {
   importStorageData,
   getLastModified,
 } from '@/hooks/useLocalStorage';
+import { getProducts, getCustomers, getSales, resetAllDatabaseData } from '@/services/dataService';
+import { Product, Customer, Sale } from '@/types';
 import {
   Settings,
   Database,
@@ -18,6 +20,7 @@ import {
   Upload,
   RefreshCw,
   ShieldCheck,
+  ShieldAlert,
   Clock,
   Package,
   Users,
@@ -27,14 +30,15 @@ import {
   CheckCircle,
   Info,
   FileJson,
+  Loader2,
 } from 'lucide-react';
 
 
 const SettingsPage: React.FC = () => {
   const {
-    productList,
-    customerList,
-    salesList,
+    productList: localProducts,
+    customerList: localCustomers,
+    salesList: localSales,
     cart,
     resetAllData,
     showToast,
@@ -45,10 +49,47 @@ const SettingsPage: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
+  const [dbSales, setDbSales] = useState<Sale[]>([]);
+  const [isLoadingDb, setIsLoadingDb] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [isDatabaseConnected, setIsDatabaseConnected] = useState(false);
+
+  useEffect(() => {
+    const fetchDbData = async () => {
+      setIsLoadingDb(true);
+      setDbError(null);
+      try {
+        const [products, customers, sales] = await Promise.all([
+          getProducts(),
+          getCustomers(),
+          getSales(),
+        ]);
+        setDbProducts(products);
+        setDbCustomers(customers);
+        setDbSales(sales);
+        setIsDatabaseConnected(true);
+      } catch (err) {
+        console.error('Failed to fetch database data:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to connect to database';
+        setDbError(errorMessage);
+        setIsDatabaseConnected(false);
+      } finally {
+        setIsLoadingDb(false);
+      }
+    };
+    fetchDbData();
+  }, []);
+
+  const dbProductCount = dbProducts.length;
+  const dbCustomerCount = dbCustomers.length;
+  const dbSalesCount = dbSales.length;
+
   // Compute storage metrics
-  const storageSize = useMemo(() => getStorageSize(), [productList, customerList, salesList, cart]);
-  const storageKeys = useMemo(() => getStorageKeys(), [productList, customerList, salesList, cart]);
-  const lastModified = useMemo(() => getLastModified(), [productList, customerList, salesList]);
+  const storageSize = useMemo(() => getStorageSize(), []);
+  const storageKeys = useMemo(() => getStorageKeys(), []);
+  const lastModified = useMemo(() => getLastModified(), []);
   const formattedSize = formatStorageSize(storageSize);
 
   // Storage capacity estimate (5MB typical localStorage limit)
@@ -58,24 +99,27 @@ const SettingsPage: React.FC = () => {
   const dataStats = [
     {
       label: 'Products',
-      count: productList.length,
+      count: dbProductCount,
       icon: Package,
       color: 'text-blue-500',
       bg: 'bg-blue-50',
+      source: 'database',
     },
     {
       label: 'Customers',
-      count: customerList.length,
+      count: dbCustomerCount,
       icon: Users,
       color: 'text-violet-500',
       bg: 'bg-violet-50',
+      source: 'database',
     },
     {
       label: 'Sales Records',
-      count: salesList.length,
+      count: dbSalesCount,
       icon: Receipt,
       color: 'text-emerald-500',
       bg: 'bg-emerald-50',
+      source: 'database',
     },
     {
       label: 'Cart Items',
@@ -83,6 +127,7 @@ const SettingsPage: React.FC = () => {
       icon: ShoppingCart,
       color: 'text-amber-500',
       bg: 'bg-amber-50',
+      source: 'local',
     },
   ];
 
@@ -94,13 +139,23 @@ const SettingsPage: React.FC = () => {
       return;
     }
     setIsResetting(true);
-    // Simulate a brief delay for UX
-    await new Promise((r) => setTimeout(r, 800));
-    resetAllData();
+    try {
+      if (isDatabaseConnected) {
+        await resetAllDatabaseData();
+        setDbProducts([]);
+        setDbCustomers([]);
+        setDbSales([]);
+      }
+      resetAllData();
+      showToast('success', 'All data has been reset to defaults');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reset database data';
+      showToast('error', errorMessage);
+      resetAllData();
+    }
     setIsResetting(false);
     setShowResetModal(false);
     setResetConfirmText('');
-    showToast('success', 'All data has been reset to defaults');
   };
 
   const handleExport = () => {
@@ -156,21 +211,43 @@ const SettingsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Persistence Status Banner */}
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-4">
-        <div className="p-2.5 rounded-xl bg-emerald-100 flex-shrink-0">
-          <ShieldCheck className="w-5 h-5 text-emerald-600" />
+      {/* Database Status Banner */}
+      <div className={`rounded-2xl p-5 flex items-start gap-4 ${
+        isDatabaseConnected && !dbError
+          ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200'
+          : 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200'
+      }`}>
+        <div className={`p-2.5 rounded-xl flex-shrink-0 ${
+          isDatabaseConnected && !dbError ? 'bg-emerald-100' : 'bg-amber-100'
+        }`}>
+          {isLoadingDb ? (
+            <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+          ) : isDatabaseConnected && !dbError ? (
+            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+          ) : (
+            <ShieldAlert className="w-5 h-5 text-amber-600" />
+          )}
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-emerald-800">
-            Local Persistence Active
+          <h3 className={`text-sm font-semibold ${
+            isDatabaseConnected && !dbError ? 'text-emerald-800' : 'text-amber-800'
+          }`}>
+            {isLoadingDb
+              ? 'Connecting to Database...'
+              : isDatabaseConnected && !dbError
+              ? 'Database Connected'
+              : 'Database Connection Issue'}
           </h3>
-          <p className="text-xs text-emerald-600 mt-1 leading-relaxed">
-            All your data (products, customers, sales, and cart) is automatically
-            saved to your browser's local storage. Changes persist across page
-            refreshes and browser restarts.
+          <p className={`text-xs mt-1 leading-relaxed ${
+            isDatabaseConnected && !dbError ? 'text-emerald-600' : 'text-amber-600'
+          }`}>
+            {isLoadingDb
+              ? 'Establishing connection to Supabase database...'
+              : isDatabaseConnected && !dbError
+              ? 'All data (products, customers, sales) is stored in the cloud database and synced in real-time. Data persists across devices and browsers.'
+              : `Failed to connect: ${dbError || 'Unknown error'}. Data is being loaded from localStorage as fallback.`}
           </p>
-          {lastModified && (
+          {isDatabaseConnected && !dbError && lastModified && (
             <div className="flex items-center gap-1.5 mt-2">
               <Clock className="w-3 h-3 text-emerald-500" />
               <span className="text-[11px] text-emerald-500 font-medium">
@@ -184,7 +261,7 @@ const SettingsPage: React.FC = () => {
       {/* Data Overview Cards */}
       <div>
         <h2 className="text-base font-semibold text-slate-800 mb-3">
-          Stored Data Overview
+          Database Overview
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {dataStats.map((stat) => {
@@ -327,7 +404,7 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Persisted Keys Detail */}
+      {/* Database Tables Detail */}
       <div className="bg-white rounded-2xl border border-slate-100 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2.5 rounded-xl bg-slate-100">
@@ -335,30 +412,27 @@ const SettingsPage: React.FC = () => {
           </div>
           <div>
             <h2 className="text-base font-semibold text-slate-800">
-              Storage Keys
+              Database Tables
             </h2>
             <p className="text-xs text-slate-400">
-              Individual data entries in localStorage
+              Supabase database tables
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
           {[
-            { key: 'swiftpos_products', label: 'Products Catalog', icon: Package, count: productList.length },
-            { key: 'swiftpos_customers', label: 'Customer Records', icon: Users, count: customerList.length },
-            { key: 'swiftpos_sales', label: 'Sales History', icon: Receipt, count: salesList.length },
-            { key: 'swiftpos_cart', label: 'Active Cart', icon: ShoppingCart, count: cart.length },
-            { key: 'swiftpos_auth', label: 'Auth State', icon: ShieldCheck, count: null },
-            { key: 'swiftpos_userEmail', label: 'User Email', icon: Settings, count: null },
+            { table: 'public.products', label: 'Products Catalog', icon: Package, count: dbProductCount },
+            { table: 'public.customers', label: 'Customer Records', icon: Users, count: dbCustomerCount },
+            { table: 'public.sales', label: 'Sales History', icon: Receipt, count: dbSalesCount },
+            { table: 'localStorage', label: 'Active Cart (Session)', icon: ShoppingCart, count: cart.length, source: 'local' },
           ].map((item) => {
             const Icon = item.icon;
-            const exists =
-              typeof window !== 'undefined' &&
-              localStorage.getItem(item.key) !== null;
+            const isConnected = isDatabaseConnected && !dbError;
+            const hasData = isConnected ? item.count > 0 : localStorage.getItem(item.table || '') !== null;
             return (
               <div
-                key={item.key}
+                key={item.table}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100/80 transition-colors"
               >
                 <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -367,16 +441,14 @@ const SettingsPage: React.FC = () => {
                     {item.label}
                   </p>
                   <p className="text-[11px] text-slate-400 font-mono truncate">
-                    {item.key}
+                    {item.table}
                   </p>
                 </div>
-                {item.count !== null && (
-                  <span className="text-xs font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                    {item.count} records
-                  </span>
-                )}
+                <span className="text-xs font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                  {item.count} records
+                </span>
                 <div className="flex items-center gap-1">
-                  {exists ? (
+                  {(item.source === 'local' || isConnected) && hasData ? (
                     <CheckCircle className="w-4 h-4 text-emerald-500" />
                   ) : (
                     <Info className="w-4 h-4 text-slate-300" />
@@ -393,12 +465,12 @@ const SettingsPage: React.FC = () => {
         <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
         <div>
           <h4 className="text-sm font-semibold text-blue-800">
-            About Local Storage
+            About Database Storage
           </h4>
           <p className="text-xs text-blue-600 mt-1 leading-relaxed">
-            Data is stored in your browser's localStorage and is specific to this
-            device and browser. Clearing browser data or using incognito mode will
-            remove stored data. Use the Export feature to create backups.
+            Data is stored in Supabase (PostgreSQL) cloud database. Your data is accessible
+            from any device with internet connection. Cart items are stored locally
+            per browser session. Use Export to create local backups.
           </p>
         </div>
       </div>
@@ -432,14 +504,14 @@ const SettingsPage: React.FC = () => {
           {/* What will be deleted */}
           <div className="bg-red-50 rounded-xl p-4 space-y-2">
             <p className="text-xs font-semibold text-red-700 uppercase tracking-wider">
-              Data to be deleted:
+              Data to be reset:
             </p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                `${productList.length} products`,
-                `${customerList.length} customers`,
-                `${salesList.length} sales records`,
-                `${cart.length} cart items`,
+                `${dbProductCount} products (database)`,
+                `${dbCustomerCount} customers (database)`,
+                `${dbSalesCount} sales (database)`,
+                `${cart.length} cart items (local)`,
               ].map((item) => (
                 <div
                   key={item}

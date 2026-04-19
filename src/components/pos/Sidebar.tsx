@@ -20,6 +20,7 @@ interface NavItem {
   id: PageType;
   label: string;
   icon: React.ElementType;
+  roles?: string[];
 }
 
 const navItems: NavItem[] = [
@@ -27,13 +28,18 @@ const navItems: NavItem[] = [
   { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'inventory', label: 'Inventory', icon: Warehouse },
-  { id: 'customers', label: 'Customers', icon: Users },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
+  // { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['admin']},
 ];
 
 const Sidebar: React.FC = () => {
   const { sidebarOpen, toggleSidebar, currentPage, setCurrentPage, logout } = useAppContext();
-
+  const { userRole } = useAppContext();
+  
+  const filteredNavItems = navItems.filter((item) => {
+    if (!item.roles) return true; // visible to all
+    return item.roles.includes(userRole);
+  });
   const handleNavClick = (page: PageType) => {
     setCurrentPage(page);
     // Close sidebar on mobile after navigation
@@ -66,7 +72,7 @@ const Sidebar: React.FC = () => {
             </div>
             {sidebarOpen && (
               <div className="overflow-hidden">
-                <h1 className="text-lg font-bold tracking-tight">SwiftPOS</h1>
+                <h1 className="text-lg font-bold tracking-tight">Mr. Sam POS</h1>
                 <p className="text-[11px] text-slate-400 -mt-0.5">Point of Sale</p>
               </div>
             )}
@@ -87,31 +93,25 @@ const Sidebar: React.FC = () => {
           {sidebarOpen && (
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-3 mb-2">Menu</p>
           )}
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPage === item.id;
+
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                title={!sidebarOpen ? item.label : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                   isActive
                     ? 'bg-emerald-500/15 text-emerald-400'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-400' : 'group-hover:text-white'}`} />
-                {sidebarOpen && (
-                  <span className="text-sm font-medium truncate">{item.label}</span>
-                )}
-                {isActive && sidebarOpen && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                )}
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
               </button>
             );
           })}
-
           {/* Separator */}
           {sidebarOpen && (
             <div className="pt-3 pb-1">

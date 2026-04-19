@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Bell, Search, Menu, User, ChevronDown, Settings, HelpCircle, Database } from 'lucide-react';
 
+
 const pageTitles: Record<string, string> = {
   dashboard: 'Dashboard',
   pos: 'Point of Sale',
@@ -28,6 +29,8 @@ const Topbar: React.FC = () => {
   const [showNotifs, setShowNotifs] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const { userRole } = useAppContext();
+  
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -137,14 +140,14 @@ const Topbar: React.FC = () => {
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-medium text-slate-700 leading-tight">Admin</p>
+              <p className="text-sm font-medium text-slate-700 leading-tight">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
           </button>
           {showProfile && (
             <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden animate-in slide-in-from-top-2">
               <div className="px-4 py-3 border-b border-slate-100">
-                <p className="text-sm font-semibold text-slate-800">Admin</p>
+                <p className="text-sm font-semibold text-slate-800">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{userEmail}</p>
               </div>
               <div className="py-1">

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import BarcodeScanner from './BarcodeScanner';
 import { useAppContext } from '@/contexts/AppContext';
-import { categories } from '@/data/mockData';
 import { payWithPaystack } from '@/services/paystack';
 import { Sale } from '@/types';
+import { Product } from '@/types';
+import { getProducts, updateProduct } from '@/services/dataService';
+import { supabase } from '@/supabase/supabase';
 import {
   Search,
   Plus,
@@ -43,6 +45,46 @@ const POSPage: React.FC = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingPayment, setProcessingPayment] = useState(false);
+
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+
+  const categories = [
+  'All',
+  ...new Set(productList.map(p => p.category)),
+];
+
+
+useEffect(() => {
+  const timeout = setTimeout(() => {
+    setDebouncedQuery(searchQuery);
+  }, 300);
+  return () => clearTimeout(timeout);
+}, [searchQuery]);
+
+  useEffect(() => {
+  if (cart.length > 0) {
+    setSaleComplete(false);
+  }
+}, [cart]);
+  
+
+  const loadProducts = useCallback(async () => {
+  try {
+    const data = await getProducts();
+    setProducts(data);
+  } catch (err) {
+    showToast('error', 'Failed to load products');
+  } finally {
+    setLoading(false);
+  }
+}, [showToast]);
+
+useEffect(() => {
+  loadProducts();
+}, [loadProducts]);
 
   useEffect(() => {
   if (scanning) {
@@ -57,20 +99,26 @@ const POSPage: React.FC = () => {
 }, [scanning]);
 
   const filteredProducts = useMemo(() => {
-    return productList.filter((p) => {
+    return products.filter((p) => {
       const matchesSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.barcode.includes(searchQuery);
+        p.name.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        p.barcode.includes(debouncedQuery);
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [productList, searchQuery, selectedCategory]);
+  }, [products, debouncedQuery, selectedCategory]);
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-GH', {
+      style: 'currency',
+      currency: 'GHS',
+    }).format(amount);
 
   const handleDetected = (code: string) => {
     setScannedBarcode(code);
-    setSearchQuery(code);
+    setSearchQuery('');
 
-    const result = productList.find(p => p.barcode === code);
+    const result = products.find(p => p.barcode === code);
     if (result) {
       if (result.stock <= 0) {
         showToast('error', `${result.name} is out of stock`);
@@ -83,55 +131,114 @@ const POSPage: React.FC = () => {
     }
   };
 
-  const finalTotal = cartTotal - discount;
+  const finalTotal = Number((cartTotal - discount).toFixed(2));
   const change = paymentMethod === 'cash' ? Math.max(0, parseFloat(amountReceived || '0') - finalTotal) : 0;
 
-  const finalizeSale = (reference?: string) => {
+const generateSaleId = () => {
+  const timestamp = Date.now().toString();
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${timestamp.slice(-6)}${random}`.toUpperCase();
+};
+
+const finalizeSale = async (reference?: string) => {
   const sale: Sale = {
-    id: Date.now().toString(),
+    id: generateSaleId(),
     items: cart,
     subtotal: cartSubtotal,
     tax: cartTax,
+    discount,
     total: finalTotal,
     paymentMethod,
-    amountReceived: paymentMethod === 'cash' ? parseFloat(amountReceived) : finalTotal,
+    amountReceived:
+      paymentMethod === 'cash'
+        ? parseFloat(amountReceived || '0')
+        : finalTotal,
     change,
     reference: reference || null,
     createdAt: new Date(),
   };
 
-  completeSale(sale);
-  setReceiptSale(sale);
+  try {
+    // 1. Save main sale
+    const { error: saleError } = await supabase.from('sales').insert([
+      {
+        id: sale.id,
+        subtotal: sale.subtotal,
+        tax: sale.tax,
+        discount: sale.discount,
+        total: sale.total,
+        payment_method: sale.paymentMethod,
+        amount_received: sale.amountReceived,
+        change_amount: sale.change,
+        sale_date: new Date().toISOString().split('T')[0],
+        sale_time: new Date().toTimeString().split(' ')[0],
+      },
+    ]);
 
-  clearCart();
-  setSaleComplete(true);
-  setShowCheckout(false);
-  setAmountReceived('');
-  setDiscount(0);
+    if (saleError) throw saleError;
 
-  showToast('success', 'Sale completed successfully!');
-};
+    // 2. Save sale items
+    const itemsPayload = cart.map((item) => ({
+      sale_id: sale.id,
+      product_id: item.product.id,
+      quantity: item.quantity,
+      price: item.product.price,
+    }));
 
-  const handlePaystackPayment = () => {
-  if (cart.length === 0) {
-    showToast('error', 'Cart is empty.');
-    return;
+    const { error: itemsError } = await supabase
+      .from('sale_items')
+      .insert(itemsPayload);
+
+    if (itemsError) throw itemsError;
+
+    // 3. Update stock
+    await Promise.all(
+      cart.map((item) =>
+        updateProduct(item.product.id, {
+          stock: Math.max(0, item.product.stock - item.quantity),
+        })
+      )
+    );
+
+    // 4. UI updates
+    completeSale(sale);
+    setReceiptSale(sale);
+
+    clearCart();
+    setSaleComplete(true);
+    setShowCheckout(false);
+    setAmountReceived('');
+    setDiscount(0);
+
+    await loadProducts();
+
+    showToast('success', 'Sale saved to database successfully!');
+  } catch (err) {
+    console.error(err);
+    showToast('error', 'Failed to save sale to database');
   }
-
-  payWithPaystack({
-    email: 'customer@email.com', // 🔥 make dynamic later
-    amount: finalTotal,
-
-    onSuccess: (reference) => {
-      finalizeSale(reference);
-    },
-
-    onClose: () => {
-      showToast('info', 'Payment cancelled');
-    },
-  });
 };
+const handlePaystackPayment = async () => {
+  if (processingPayment) return;
 
+  setProcessingPayment(true);
+
+  try {
+    const reference = await payWithPaystack({
+      email: 'customer@email.com',
+      amount: finalTotal * 100,
+      onClose: () => {
+        showToast('info', 'Payment cancelled');
+      },
+    });
+
+    await finalizeSale(reference);
+  } catch (error) {
+    showToast('error', 'Payment failed');
+  } finally {
+    setProcessingPayment(false);
+  }
+};
 
 const handleCompleteSale = () => {
   if (cart.length === 0) {
@@ -149,6 +256,7 @@ const handleCompleteSale = () => {
 
   finalizeSale(); // no reference for cash
 };
+
 return (
     <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-7rem)]">
       {/* LEFT: Product Grid */}
@@ -249,7 +357,7 @@ return (
                   </div>
                   <p className="text-sm font-semibold text-slate-800 truncate">{product.name}</p>
                   <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-base font-bold text-emerald-600">${product.price.toFixed(2)}</span>
+                    <span className="text-base font-bold text-emerald-600">{formatCurrency(product.price)}</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                       product.stock <= 10
                         ? 'bg-red-50 text-red-600'
@@ -317,7 +425,7 @@ return (
             {item.product.name}
           </p>
           <p className="text-xs text-blue-300">
-            ${item.product.price.toFixed(2)} each
+            {formatCurrency(item.product.price)} each
           </p>
         </div>
 
@@ -347,7 +455,7 @@ return (
 
         <div className="text-right">
           <p className="text-sm font-semibold text-cyan-300">
-            ${(item.product.price * item.quantity).toFixed(2)}
+            {formatCurrency(item.product.price * item.quantity)}
           </p>
 
           <button
@@ -370,23 +478,23 @@ return (
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-slate-400">
             <span>Subtotal</span>
-            <span>${cartSubtotal.toFixed(2)}</span>
+            <span>{formatCurrency(cartSubtotal)}</span>
           </div>
           <div className="flex justify-between text-sm text-slate-400">
             <span>Tax (8%)</span>
-            <span>${cartTax.toFixed(2)}</span>
+            <span>{formatCurrency(cartTax)}</span>
           </div>
 
           {discount > 0 && (
             <div className="flex justify-between text-sm text-emerald-400">
               <span>Discount</span>
-              <span>-${discount.toFixed(2)}</span>
+              <span>{formatCurrency(discount)}</span>
             </div>
           )}
 
           <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-slate-700">
             <span>Total</span>
-            <span>${finalTotal.toFixed(2)}</span>
+            <span>{formatCurrency(finalTotal)}</span>
           </div>
         </div>
 
@@ -394,7 +502,7 @@ return (
         <div className="flex items-center gap-2">
           <input
             type="number"
-            placeholder="Discount ($)"
+            placeholder="Discount (₵)"
             value={discount || ''}
             onChange={(e) =>
               setDiscount(Math.max(0, parseFloat(e.target.value) || 0))
@@ -461,7 +569,7 @@ return (
 
             {parseFloat(amountReceived || '0') >= finalTotal && (
               <p className="text-sm text-emerald-400 font-medium mt-1.5">
-                Change: ${change.toFixed(2)}
+                Change: {formatCurrency(change)}
               </p>
             )}
           </div>
@@ -470,7 +578,7 @@ return (
         {/* Total */}
         <div className="bg-slate-800 text-white rounded-xl p-4 text-center border border-slate-700">
           <p className="text-xs text-slate-400 mb-1">Total Amount</p>
-          <p className="text-2xl font-bold">${finalTotal.toFixed(2)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(finalTotal)}</p>
         </div>
 
         <div className="flex gap-2">

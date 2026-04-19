@@ -1,7 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, } from 'react';
+import { Product, Category } from '@/types';
+import {
+  getProducts,
+  addProduct,
+  updateProduct,
+  deleteProduct, getCategories, uploadProductImage,
+} from '@/services/dataService';
 import { useAppContext } from '@/contexts/AppContext';
-import { categories } from '@/data/mockData';
-import { Product } from '@/types';
 import Modal from './Modal';
 import {
   Search,
@@ -11,7 +16,9 @@ import {
   Package,
   Filter,
   X,
+  ScanBarcode,
 } from 'lucide-react';
+import BarcodeScanner from './BarcodeScanner';
 
 const emptyProduct: Partial<Product> = {
   name: '',
@@ -24,17 +31,52 @@ const emptyProduct: Partial<Product> = {
 };
 
 const ProductsPage: React.FC = () => {
-  const { productList, addProduct, updateProduct, deleteProduct, showToast } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const categoryOptions = ['All', ...categories.map(c => c.name)];
+  const [loading, setLoading] = useState(true);
+  const { userRole } = useAppContext();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+
+useEffect(() => {
+  loadProducts();
+  loadCategories();
+}, []);
+
+const loadCategories = async () => {
+  try {
+    const data = await getCategories();
+    setCategories(data);
+  } catch (err) {
+    console.error(err);
+    alert('Failed to load categories');
+  }
+};
+const loadProducts = async () => {
+  try {
+    const data = await getProducts();
+    setProductList(data);
+  } catch (err) {
+    console.error(err);
+    alert('Failed to load products');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const filtered = useMemo(() => {
     return productList.filter((p) => {
-      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery);
+      const matchSearch =
+  p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  (p.barcode?.includes(searchQuery) ?? false);
       const matchCat = filterCategory === 'All' || p.category === filterCategory;
       return matchSearch && matchCat;
     });
@@ -42,45 +84,76 @@ const ProductsPage: React.FC = () => {
 
   const openAdd = () => {
     setEditingProduct({ ...emptyProduct });
+    setImageFile(null);
+    setImagePreview(null);
     setShowModal(true);
   };
 
   const openEdit = (product: Product) => {
     setEditingProduct({ ...product });
+    setImageFile(null);
+    setImagePreview(product.image || null);
     setShowModal(true);
   };
 
-  const handleSave = () => {
-    if (!editingProduct?.name || !editingProduct?.price) {
-      showToast('error', 'Please fill in required fields');
-      return;
+const handleSave = async () => {
+  if (!editingProduct?.name || editingProduct?.price == null) {
+    alert('Please fill required fields');
+    return;
+  }
+
+  try {
+    let finalImage = editingProduct.image;
+
+    if (imageFile) {
+      finalImage = await uploadProductImage(imageFile);
     }
+
+    const productData = { ...editingProduct, image: finalImage };
 
     if (editingProduct.id) {
-      updateProduct(editingProduct as Product);
-      showToast('success', 'Product updated successfully');
+      await updateProduct(editingProduct.id, productData, imageFile || undefined);
+      await loadProducts();
     } else {
-      const newProduct: Product = {
-        ...editingProduct as Product,
-        id: `p${Date.now()}`,
-        image: editingProduct.image || 'https://d64gsuwffb70l.cloudfront.net/69bd8f27cadb627780a384dc_1774030733176_dcc71bd9.jpg',
-        barcode: editingProduct.barcode || `100${Date.now().toString().slice(-4)}`,
-      };
-      addProduct(newProduct);
-      showToast('success', 'Product added successfully');
+      await addProduct(productData, imageFile || undefined);
+      await loadProducts();
     }
+
     setShowModal(false);
     setEditingProduct(null);
-  };
+    setImageFile(null);
+    setImagePreview(null);
+  } catch (err: any) {
+    console.error('Save error:', err);
+    alert(err?.message || 'Operation failed');
+  }
+};
 
-  const handleDelete = () => {
-    if (deleteId) {
-      deleteProduct(deleteId);
-      showToast('success', 'Product deleted');
-      setShowDeleteModal(false);
-      setDeleteId(null);
-    }
-  };
+const handleDelete = async () => {
+  if (!deleteId) return;
+
+try {
+  await deleteProduct(deleteId);
+  setProductList(prev => prev.filter(p => p.id !== deleteId));
+
+  setShowDeleteModal(false);
+  setDeleteId(null);
+
+} catch (err: any) {
+  console.error('Delete error:', err);
+  alert(err?.message || 'Delete failed');
+}
+};
+
+if (loading) {
+  return <p className="text-center py-10">Loading products...</p>;
+}
+
+    const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-GH', {
+    style: 'currency',
+    currency: 'GHS',
+  }).format(amount);
 
   return (
     <div className="space-y-5">
@@ -90,13 +163,15 @@ const ProductsPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-800">Products</h1>
           <p className="text-sm text-slate-500 mt-0.5">{productList.length} products in inventory</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25 text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add Product
-        </button>
+        {userRole === 'admin' && (
+          <button
+            onClick={openAdd}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-medium rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/25 text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -123,7 +198,7 @@ const ProductsPage: React.FC = () => {
             onChange={(e) => setFilterCategory(e.target.value)}
             className="bg-transparent text-sm text-slate-700 outline-none"
           >
-            {categories.map((c) => (
+            {categoryOptions.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -141,7 +216,11 @@ const ProductsPage: React.FC = () => {
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Price</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Stock</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Barcode</th>
-                <th className="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  {userRole === 'admin' && (
+                    <th className="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  )}
               </tr>
             </thead>
             <tbody>
@@ -149,7 +228,7 @@ const ProductsPage: React.FC = () => {
                 <tr key={product.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover" />
+                      <img src={product.image || 'https://via.placeholder.com/40'} alt={product.name} className="w-10 h-10 rounded-lg object-cover" />
                       <div>
                         <p className="text-sm font-medium text-slate-800">{product.name}</p>
                         <p className="text-xs text-slate-400">{product.description}</p>
@@ -161,7 +240,7 @@ const ProductsPage: React.FC = () => {
                       {product.category}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-sm font-semibold text-slate-800">${product.price.toFixed(2)}</td>
+                  <td className="px-5 py-3.5 text-sm font-semibold text-slate-800">{formatCurrency(product.price)}</td>
                   <td className="px-5 py-3.5">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                       product.stock <= 10
@@ -174,6 +253,7 @@ const ProductsPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-sm text-slate-500 font-mono">{product.barcode}</td>
+                {userRole === 'admin' && (
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -190,6 +270,7 @@ const ProductsPage: React.FC = () => {
                       </button>
                     </div>
                   </td>
+                    )}
                 </tr>
               ))}
             </tbody>
@@ -225,8 +306,8 @@ const ProductsPage: React.FC = () => {
                   onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 >
-                  {categories.filter(c => c !== 'All').map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -235,7 +316,7 @@ const ProductsPage: React.FC = () => {
                 <input
                   type="number"
                   step="0.01"
-                  value={editingProduct.price || ''}
+                  value={editingProduct.price ?? ''}
                   onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   placeholder="0.00"
@@ -245,7 +326,7 @@ const ProductsPage: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Stock</label>
                 <input
                   type="number"
-                  value={editingProduct.stock || ''}
+                  value={editingProduct.stock ?? ''}
                   onChange={(e) => setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   placeholder="0"
@@ -253,23 +334,49 @@ const ProductsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Barcode</label>
-                <input
-                  type="text"
-                  value={editingProduct.barcode || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  placeholder="Auto-generated"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editingProduct.barcode || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
+                    className="w-full px-3 py-2.5 pr-10 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    placeholder="Enter or Scan barcode"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowScanner(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition"
+                  >
+                    <ScanBarcode size={18} />
+                  </button>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
-                <input
-                  type="text"
-                  value={editingProduct.image || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  placeholder="https://..."
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Image</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
+                    {imagePreview || editingProduct.image ? (
+                      <img src={imagePreview || editingProduct.image} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-8 h-8 text-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setImageFile(file);
+                          setImagePreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">JPG, PNG, or GIF</p>
+                  </div>
+                </div>
               </div>
             </div>
             <div>
@@ -324,6 +431,15 @@ const ProductsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+      {showScanner && (
+        <BarcodeScanner
+          onDetected={(code) => {
+            setEditingProduct({ ...editingProduct, barcode: code });
+            setShowScanner(false);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </div>
   );
 };

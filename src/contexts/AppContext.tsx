@@ -20,9 +20,10 @@ interface AppContextType {
 
   // Auth
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string, role: 'admin' | 'cashier') => Promise<boolean>;
   logout: () => void;
   userEmail: string;
+  userRole: 'admin' | 'cashier' | null;
 
   // Cart
   cart: CartItem[];
@@ -75,6 +76,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ─── Auth (persisted) ───
   const [isAuthenticated, setIsAuthenticated] = useLocalStorage<boolean>('auth', true);
   const [userEmail, setUserEmail] = useLocalStorage<string>('userEmail', 'admin@posapp.com');
+  const [userRole, setUserRole] = useLocalStorage<'admin' | 'cashier' | null>(
+    'userRole',
+    null
+  );
 
   // ─── Core data (persisted via useLocalStorage) ───
   const [cart, setCart] = useLocalStorage<CartItem[]>('cart', []);
@@ -86,25 +91,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
 
+  // ─── Toast ───
+  const showToast = useCallback((type: Toast['type'], message: string) => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   // ─── Navigation ───
   const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 
   // ─── Auth ───
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string,
+    role: 'admin' | 'cashier'
+  ): Promise<boolean> => {
     await new Promise((r) => setTimeout(r, 1500));
-    if (email && password.length >= 4) {
-      setIsAuthenticated(true);
-      setUserEmail(email);
-      setCurrentPage('dashboard');
-      return true;
-    }
-    return false;
-  };
 
+    const users = [
+      { email: 'admin@posapp.com', password: 'admin123', role: 'admin' },
+      { email: 'cashier@posapp.com', password: 'cashier123', role: 'cashier' },
+    ];
+
+    // 🔍 Step 1: Find user by email + password
+    const user = users.find(
+      (u) => u.email === email && u.password === password
+    );
+
+    if (!user) return false;
+
+    // ⚠️ Step 2: Check role mismatch
+    if (user.role !== role) {
+      showToast('error', `You are registered as a ${user.role}, not ${role}`);
+      return false;
+    }
+
+    // ✅ Step 3: Login success
+    setIsAuthenticated(true);
+    setUserEmail(user.email);
+    setUserRole(user.role);
+    setCurrentPage(
+      user.role === 'admin' ? 'admin-dashboard' : 'cashier-dashboard'
+    );
+
+    return true;
+  };
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentPage('login');
     setUserEmail('');
+    setUserRole(null);
   };
 
   // ─── Cart ───
@@ -198,19 +241,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateLastModified();
   };
 
-  // ─── Toast ───
-  const showToast = useCallback((type: Toast['type'], message: string) => {
-    const id = Date.now().toString();
-    setToasts((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
   // ─── Reset All Data ───
   const resetAllData = () => {
     clearAllStorage();
@@ -220,6 +250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
     setIsAuthenticated(true);
     setUserEmail('admin@posapp.com');
+    setUserRole(null);
     setCurrentPage('dashboard');
   };
 
@@ -234,6 +265,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         logout,
         userEmail,
+        userRole,
         cart,
         addToCart,
         removeFromCart,

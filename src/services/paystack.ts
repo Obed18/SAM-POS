@@ -16,7 +16,7 @@ type PaystackPop = {
     email: string;
     amount: number;
     currency: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     callback: (response: PaystackResponse) => void;
     onClose?: () => void;
   }) => PaystackHandler;

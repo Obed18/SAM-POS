@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import BarcodeScanner from './BarcodeScanner';
-import { dailySalesData } from '@/data/mockData';
+import { getDashboardData } from '@/services/dataService';
+import { Sale, Product, Customer } from '@/types';
 import {
   TrendingUp,
   TrendingDown,
@@ -17,6 +18,8 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+
+
 const paymentIcons = {
   cash: Banknote,
   card: CreditCard,
@@ -24,13 +27,64 @@ const paymentIcons = {
 };
 
 const DashboardPage: React.FC = () => {
-  const { setCurrentPage, salesList, productList, customerList } = useAppContext();
+  const [salesList, setSalesList] = useState<Sale[]>([]);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [customerList, setCustomerList] = useState<Customer[]>([]);
+  const [dailySales, setDailySales] = useState<{ date: string; revenue: number }[]>([]);
+  const [loading, setLoading] = useState(true);
   const [scannerActive, setScannerActive] = useState(false);
   const [detectedBarcode, setDetectedBarcode] = useState('');
+  const { setCurrentPage } = useAppContext();
+  const currentMonth = new Date().toLocaleString('default', {
+  month: 'long',
+  year: 'numeric',
+});
+const [error, setError] = useState('');
+const { userRole } = useAppContext();
+
+
+const loadDashboard = useCallback(async () => {
+  try {
+    const data = await getDashboardData();
+    setSalesList(data.sales);
+    setProductList(data.products);
+    setCustomerList(data.customers);
+    setDailySales(data.dailySales);
+  } catch (err) {
+  console.error(err);
+  setError('Failed to load dashboard data');
+}
+ finally {
+    setLoading(false);
+  }
+}, []);
+
+useEffect(() => {
+  loadDashboard();
+
+  const handleVisibility = () => {
+    if (document.visibilityState === 'visible') {
+      loadDashboard();
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibility);
+
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibility);
+  };
+}, [loadDashboard]);
+
+
+    const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-GH', {
+    style: 'currency',
+    currency: 'GHS',
+  }).format(amount);
 
   // Compute live stats from persisted data
   const liveStats = useMemo(() => {
-    const totalRevenue = salesList.reduce((sum, s) => sum + s.total, 0);
+    const totalRevenue = salesList.reduce((sum, s) => sum + (s.total || 0), 0);
     return {
       totalSales: salesList.length,
       revenue: totalRevenue,
@@ -39,50 +93,93 @@ const DashboardPage: React.FC = () => {
     };
   }, [salesList, productList, customerList]);
 
-  const stats = [
-    {
-      label: 'Total Sales',
-      value: liveStats.totalSales.toLocaleString(),
-      change: 12.5,
-      icon: ShoppingBag,
-      bg: 'bg-blue-50',
-      iconColor: 'text-blue-500',
-    },
-    {
-      label: 'Revenue',
-      value: `$${liveStats.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      change: 8.3,
-      icon: DollarSign,
-      bg: 'bg-emerald-50',
-      iconColor: 'text-emerald-500',
-    },
-    {
-      label: 'Products',
-      value: liveStats.totalProducts.toString(),
-      change: 3,
-      icon: Package,
-      bg: 'bg-violet-50',
-      iconColor: 'text-violet-500',
-    },
-    {
-      label: 'Customers',
-      value: liveStats.totalCustomers.toString(),
-      change: 15.2,
-      icon: Users,
-      bg: 'bg-amber-50',
-      iconColor: 'text-amber-500',
-    },
-  ];
+const stats = [
+  {
+    label: 'Total Sales',
+    value: liveStats.totalSales.toLocaleString(),
+    change: 12.5,
+    icon: ShoppingBag,
+    bg: 'bg-blue-50',
+    iconColor: 'text-blue-500',
+  },
+  {
+    label: 'Revenue',
+    value: formatCurrency(liveStats.revenue),
+    change: 8.3,
+    icon: DollarSign,
+    bg: 'bg-emerald-50',
+    iconColor: 'text-emerald-500',
+  },
+  {
+    label: 'Products',
+    value: liveStats.totalProducts.toString(),
+    change: 3,
+    icon: Package,
+    bg: 'bg-violet-50',
+    iconColor: 'text-violet-500',
+  },
+  {
+    label: 'Customers',
+    value: liveStats.totalCustomers.toString(),
+    change: 15.2,
+    icon: Users,
+    bg: 'bg-amber-50',
+    iconColor: 'text-amber-500',
+  },
+];
 
+const actions = [
+  {
+    label: 'New Sale',
+    page: 'pos' as const,
+    color: 'bg-emerald-500 hover:bg-emerald-600',
+    icon: ShoppingBag,
+    roles: ['admin', 'cashier'],
+  },
+  {
+    label: 'Add Product',
+    page: 'products' as const,
+    color: 'bg-blue-500 hover:bg-blue-600',
+    icon: Package,
+    roles: ['admin'], 
+  },
+  {
+    label: 'View Reports',
+    page: 'reports' as const,
+    color: 'bg-violet-500 hover:bg-violet-600',
+    icon: TrendingUp,
+    roles: ['admin'], 
+  },
+  {
+    label: 'Customers',
+    page: 'customers' as const,
+    color: 'bg-amber-500 hover:bg-amber-600',
+    icon: Users,
+    roles: ['admin', 'cashier'],
+  },
+];
   // Use the most recent 5 sales from persisted data
-  const recentSalesDisplay = salesList.slice(0, 5);
+  const recentSalesDisplay = useMemo(
+    () =>
+      [...salesList]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .slice(0, 5),
+    [salesList]
+  );
+
+  if (loading) {
+  return <p className="text-center py-10">Loading dashboard...</p>;
+}
 
   return (
     <div className="space-y-6">
       {/* Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome back, Admin</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {userRole.charAt(0).toUpperCase() + userRole.slice(1)}</h1>
           <p className="text-slate-500 text-sm mt-0.5">Here's what's happening with your store today.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -152,6 +249,7 @@ const DashboardPage: React.FC = () => {
               setScannerActive(false);
               setCurrentPage('pos');
             }}
+            onClose={() => setScannerActive(false)}
           />
           <p className="mt-3 text-sm text-slate-600">Scanned barcode: <span className="font-semibold text-slate-800">{detectedBarcode || 'No barcode scanned yet'}</span></p>
         </div>
@@ -164,7 +262,7 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-base font-semibold text-slate-800">Revenue Overview</h3>
-              <p className="text-sm text-slate-400 mt-0.5">Daily revenue for March 2026</p>
+              <p className="text-sm text-slate-400 mt-0.5">Daily revenue for {currentMonth}</p>
             </div>
             <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
               {['7D', '14D', '30D'].map((period, i) => (
@@ -179,8 +277,13 @@ const DashboardPage: React.FC = () => {
               ))}
             </div>
           </div>
+                {dailySales.length === 0 ? (
+        <div className="flex items-center justify-center h-[280px] text-slate-400 text-sm">
+          No revenue data yet
+        </div>
+      ) : (
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={dailySalesData}>
+            <AreaChart data={dailySales}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
@@ -188,8 +291,8 @@ const DashboardPage: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+              <XAxis dataKey="date" tickFormatter={(date) => new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) } tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#fff',
@@ -198,7 +301,7 @@ const DashboardPage: React.FC = () => {
                   boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                   fontSize: '13px',
                 }}
-                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                formatter={(value: number) => [formatCurrency(value), 'Revenue']}
               />
               <Area
                 type="monotone"
@@ -208,7 +311,7 @@ const DashboardPage: React.FC = () => {
                 fill="url(#colorRevenue)"
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>)}
         </div>
 
         {/* Recent Sales */}
@@ -231,7 +334,7 @@ const DashboardPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {recentSalesDisplay.map((sale) => {
-                const PayIcon = paymentIcons[sale.paymentMethod];
+                const PayIcon = paymentIcons[sale.paymentMethod as keyof typeof paymentIcons] || Banknote;
                 return (
                   <div key={sale.id} className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -241,9 +344,9 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm font-medium text-slate-700 truncate">
                         {sale.customerName || 'Walk-in Customer'}
                       </p>
-                      <p className="text-xs text-slate-400">{sale.time} &middot; {sale.items.length} items</p>
+                      <p className="text-xs text-slate-400">{new Date(sale.createdAt).toLocaleDateString('en-GB')} &middot; {(sale.items?.length || 0)} items</p>
                     </div>
-                    <p className="text-sm font-semibold text-slate-800">${sale.total.toFixed(2)}</p>
+                    <p className="text-sm font-semibold text-slate-800">{formatCurrency(sale.total)}</p>
                   </div>
                 );
               })}
@@ -253,26 +356,23 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'New Sale', page: 'pos' as const, color: 'bg-emerald-500 hover:bg-emerald-600', icon: ShoppingBag },
-          { label: 'Add Product', page: 'products' as const, color: 'bg-blue-500 hover:bg-blue-600', icon: Package },
-          { label: 'View Reports', page: 'reports' as const, color: 'bg-violet-500 hover:bg-violet-600', icon: TrendingUp },
-          { label: 'Customers', page: 'customers' as const, color: 'bg-amber-500 hover:bg-amber-600', icon: Users },
-        ].map((action) => {
-          const Icon = action.icon;
-          return (
-            <button
-              key={action.label}
-              onClick={() => setCurrentPage(action.page)}
-              className={`${action.color} text-white rounded-2xl p-5 text-left transition-all duration-200 shadow-lg hover:shadow-xl group`}
-            >
-              <Icon className="w-6 h-6 mb-3 opacity-80 group-hover:opacity-100 transition-opacity" />
-              <p className="text-sm font-semibold">{action.label}</p>
-            </button>
-          );
-        })}
-      </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {actions
+            .filter(action => action.roles.includes(userRole))
+            .map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.label}
+                  onClick={() => setCurrentPage(action.page)}
+                  className={`${action.color} text-white rounded-2xl p-5 text-left transition-all duration-200 shadow-lg hover:shadow-xl group`}
+                >
+                  <Icon className="w-6 h-6 mb-3 opacity-80 group-hover:opacity-100 transition-opacity" />
+                  <p className="text-sm font-semibold">{action.label}</p>
+                </button>
+              );
+            })}
+        </div>
     </div>
   );
 };

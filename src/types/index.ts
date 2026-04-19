@@ -9,6 +9,11 @@ export interface Product {
   description?: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;
@@ -36,8 +41,8 @@ export interface Sale {
   change: number;
   customerId?: string;
   customerName?: string;
-  date: string;
-  time: string;
+  reference?: string | null;
+  createdAt: Date;
 }
 
 export interface DashboardStats {
@@ -63,4 +68,11 @@ export interface Toast {
   message: string;
 }
 
-export type PageType = 'dashboard' | 'pos' | 'products' | 'inventory' | 'customers' | 'reports' | 'settings' | 'login';
+export type PageType = 'dashboard' | 'admin-dashboard' | 'cashier-dashboard' | 'pos' | 'products' | 'inventory' | 'customers' | 'reports' | 'settings' | 'login';
+
+export type PaystackProps = {
+  email: string;
+  amount: number;
+  onSuccess?: (reference: string) => void;
+  onClose?: () => void;
+};

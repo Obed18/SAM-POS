@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { useAppContext } from '@/contexts/AppContext';
-import { categories } from '@/data/mockData';
+import React, { useState, useMemo, useEffect, } from 'react';
+import { getProducts } from '@/services/dataService';
+import { Product } from '@/types';
 import {
   Warehouse,
   AlertTriangle,
@@ -11,13 +11,43 @@ import {
 } from 'lucide-react';
 
 const InventoryPage: React.FC = () => {
-  const { productList } = useAppContext();
+    const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [sortBy, setSortBy] = useState<'name' | 'stock-asc' | 'stock-desc'>('stock-asc');
 
+    const categories = [
+  'All',
+  ...new Set(products.map(p => p.category)),
+];
+
+
+const loadProducts = async (showLoader = false) => {
+  if (showLoader) setLoading(true);
+
+  try {
+    const data = await getProducts();
+    setProducts(data);
+  } catch (err) {
+    console.error('Failed to load products');
+  } finally {
+    if (showLoader) setLoading(false);
+  }
+};
+
+useEffect(() => {
+  loadProducts(true); // first load shows loader
+
+  const interval = setInterval(() => {
+    loadProducts(false); // silent refresh
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, []);
+
   const filtered = useMemo(() => {
-    let items = productList.filter((p) => {
+    const items = [...products].filter((p) => {
       const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchCat = filterCategory === 'All' || p.category === filterCategory;
       return matchSearch && matchCat;
@@ -28,11 +58,11 @@ const InventoryPage: React.FC = () => {
     else items.sort((a, b) => a.name.localeCompare(b.name));
 
     return items;
-  }, [productList, searchQuery, filterCategory, sortBy]);
+  }, [products, searchQuery, filterCategory, sortBy]);
 
-  const lowStockCount = productList.filter(p => p.stock <= 10).length;
-  const medStockCount = productList.filter(p => p.stock > 10 && p.stock <= 30).length;
-  const totalStock = productList.reduce((s, p) => s + p.stock, 0);
+  const lowStockCount = products.filter(p => p.stock <= 10).length;
+  const medStockCount = products.filter(p => p.stock > 10 && p.stock <= 30).length;
+  const totalStock = products.reduce((s, p) => s + p.stock, 0);
 
   const getStockColor = (stock: number) => {
     if (stock <= 10) return { bar: 'bg-red-500', bg: 'bg-red-100', text: 'text-red-600', badge: 'bg-red-50 text-red-600 border-red-200' };
@@ -40,7 +70,15 @@ const InventoryPage: React.FC = () => {
     return { bar: 'bg-emerald-500', bg: 'bg-emerald-100', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
   };
 
-  const maxStock = Math.max(...productList.map(p => p.stock), 1);
+  const maxStock = Math.max(...products.map(p => p.stock), 1);
+
+  if (loading) {
+  return (
+    <div className="flex items-center justify-center h-64 text-slate-400">
+      <p>Loading inventory...</p>
+    </div>
+  );
+}
 
   return (
     <div className="space-y-5">
@@ -113,7 +151,7 @@ const InventoryPage: React.FC = () => {
           <ArrowUpDown className="w-4 h-4 text-slate-400" />
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as 'name' | 'stock-asc' | 'stock-desc')}
             className="bg-transparent text-sm text-slate-700 outline-none"
           >
             <option value="stock-asc">Stock: Low to High</option>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import { dailySalesData, productPerformance, recentSales } from '@/data/mockData';
+import { supabase } from '@/supabase/supabase';
 import {
   AreaChart,
   Area,
@@ -34,20 +34,159 @@ const paymentIcons = {
   mobile: Smartphone,
 };
 
+type DailySalesData = {
+  date: string;
+  revenue: number;
+  sales: number;
+};
+
+type ProductPerformanceData = {
+  name: string;
+  sales: number;
+  revenue: number;
+};
+
+type PaymentBreakdownData = {
+  name: string;
+  value: number;
+  color: string;
+};
+
+type SupabaseSaleRow = {
+  sale_date: string;
+  total: number | string;
+};
+
+type SupabaseSaleItemRow = {
+  quantity: number;
+  price: number;
+  product_id: string;
+  products: { name: string; }[];
+};
+
+type SupabasePaymentRow = {
+  payment_method: 'cash' | 'card' | 'mobile' | string;
+};
+
+    const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-GH', {
+    style: 'currency',
+    currency: 'GHS',
+  }).format(amount);
+
+
 const ReportsPage: React.FC = () => {
   const { salesList } = useAppContext();
+
+  const [dailySales, setDailySales] = useState<DailySalesData[]>([]);
+  const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
+  const [paymentBreakdown, setPaymentBreakdown] = useState<PaymentBreakdownData[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions'>('overview');
 
-  const totalRevenue = dailySalesData.reduce((s, d) => s + d.revenue, 0);
-  const totalSales = dailySalesData.reduce((s, d) => s + d.sales, 0);
-  const avgOrderValue = totalRevenue / totalSales;
+const totalRevenue = dailySales.reduce((s, d) => s + d.revenue, 0);
+const totalSales = dailySales.reduce((s, d) => s + d.sales, 0);
+const avgOrderValue = totalSales ? totalRevenue / totalSales : 0;
 
-  // Payment method breakdown
-  const paymentBreakdown = [
-    { name: 'Card', value: 45, color: '#3b82f6' },
-    { name: 'Cash', value: 35, color: '#10b981' },
-    { name: 'Mobile', value: 20, color: '#8b5cf6' },
-  ];
+  useEffect(() => {
+  const fetchDailySales = async () => {
+    const { data, error } = await supabase
+  .from('sales')
+  .select('sale_date, total');
+
+if (error || !data) {
+  console.error(error);
+  return;
+}
+
+const grouped = (data as SupabaseSaleRow[]).reduce<DailySalesData[]>((acc, sale) => {
+  const existing = acc.find((d) => d.date === sale.sale_date);
+  const saleTotal = Number(sale.total);
+
+  if (existing) {
+    existing.revenue += saleTotal;
+    existing.sales += 1;
+  } else {
+    acc.push({
+      date: sale.sale_date,
+      revenue: saleTotal,
+      sales: 1,
+    });
+  }
+
+  return acc;
+}, []);
+
+setDailySales(grouped);
+  };
+
+  fetchDailySales();
+}, []);
+
+useEffect(() => {
+  const fetchProducts = async () => {
+    const { data, error } = await supabase
+      .from('sale_items')
+      .select(`
+        quantity,
+        price,
+        product_id,
+        products(name)
+      `);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const grouped = (data as SupabaseSaleItemRow[]).reduce<Record<string, ProductPerformanceData>>((acc, item) => {
+      const name = item.products?.[0]?.name ?? 'Unknown Product';
+
+      if (!acc[name]) {
+        acc[name] = {
+          name,
+          sales: 0,
+          revenue: 0,
+        };
+      }
+
+      acc[name].sales += item.quantity;
+      acc[name].revenue += item.quantity * item.price;
+
+      return acc;
+    }, {});
+
+    setProductPerformance(Object.values(grouped));
+  };
+
+  fetchProducts();
+}, []);
+
+useEffect(() => {
+  const fetchPayments = async () => {
+    const { data } = await supabase.from('sales').select('payment_method');
+
+    const grouped = (data as SupabasePaymentRow[]).reduce<Record<string, number>>((acc, s) => {
+      const method = s.payment_method ?? 'unknown';
+      acc[method] = (acc[method] || 0) + 1;
+      return acc;
+    }, {});
+
+    const total = (data ?? []).length || 0;
+
+    const formatted = Object.entries(grouped).map(([key, value]) => ({
+      name: key,
+      value: total > 0 ? Math.round((value / total) * 100) : 0,
+      color:
+        key === 'cash' ? '#10b981' :
+        key === 'card' ? '#3b82f6' :
+        '#8b5cf6',
+    }));
+
+    setPaymentBreakdown(formatted);
+  };
+
+  fetchPayments();
+}, []);
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview' },
@@ -77,7 +216,7 @@ const ReportsPage: React.FC = () => {
               <DollarSign className="w-5 h-5 text-emerald-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">${totalRevenue.toFixed(0)}</p>
+              <p className="text-2xl font-bold text-slate-800">{formatCurrency(avgOrderValue)}</p>
               <p className="text-sm text-slate-500">Total Revenue</p>
             </div>
           </div>
@@ -99,7 +238,7 @@ const ReportsPage: React.FC = () => {
               <TrendingUp className="w-5 h-5 text-violet-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">${avgOrderValue.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-slate-800">{formatCurrency(avgOrderValue)}</p>
               <p className="text-sm text-slate-500">Avg Order Value</p>
             </div>
           </div>
@@ -131,7 +270,7 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-base font-semibold text-slate-800 mb-1">Daily Revenue</h3>
             <p className="text-sm text-slate-400 mb-6">Revenue trend for March 2026</p>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={dailySalesData}>
+              <AreaChart data={dailySales}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
@@ -140,10 +279,10 @@ const ReportsPage: React.FC = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontSize: '13px' }}
-                  formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                  formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2.5} fill="url(#colorRev)" />
               </AreaChart>
@@ -171,7 +310,7 @@ const ReportsPage: React.FC = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '13px' }}
-                  formatter={(value: number) => [`${value}%`, 'Share']}
+                  formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -193,7 +332,7 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-base font-semibold text-slate-800 mb-1">Daily Sales Volume</h3>
             <p className="text-sm text-slate-400 mb-6">Number of transactions per day</p>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={dailySalesData}>
+              <BarChart data={dailySales}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -216,11 +355,11 @@ const ReportsPage: React.FC = () => {
             <ResponsiveContainer width="100%" height={350}>
               <BarChart data={productPerformance} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrency(v)} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={130} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '13px' }}
-                  formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                  formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                 />
                 <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
                   {productPerformance.map((_, i) => (
@@ -285,7 +424,10 @@ const ReportsPage: React.FC = () => {
               </thead>
               <tbody>
                 {salesList.map((sale) => {
-                  const PayIcon = paymentIcons[sale.paymentMethod];
+                  const PayIcon = paymentIcons[sale.paymentMethod] ?? Banknote;
+                  const createdAt = new Date(sale.createdAt);
+                  const saleDate = createdAt.toLocaleDateString();
+                  const saleTime = createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   return (
                     <tr key={sale.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                       <td className="px-5 py-3.5 text-sm font-mono text-slate-500">{sale.id.toUpperCase()}</td>
@@ -293,7 +435,7 @@ const ReportsPage: React.FC = () => {
                       <td className="px-5 py-3.5 text-sm text-slate-500">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
-                          {sale.date} {sale.time}
+                          {saleDate} {saleTime}
                         </div>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-slate-500">{sale.items.length} items</td>
