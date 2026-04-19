@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppContext } from '@/contexts/AppContext';
+import useAppContext from '@/hooks/useAppContext';
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 const iconMap = {

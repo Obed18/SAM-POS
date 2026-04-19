@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import BarcodeScanner from './BarcodeScanner';
-import { useAppContext } from '@/contexts/AppContext';
+import useAppContext from '@/hooks/useAppContext';
 import { payWithPaystack } from '@/services/paystack';
 import { Sale } from '@/types';
 import { Product } from '@/types';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppContext } from '@/contexts/AppContext';
+import useAppContext from '@/hooks/useAppContext';
 import { supabase } from '@/supabase/supabase';
 import {
   AreaChart,

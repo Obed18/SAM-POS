@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { useAppContext } from '@/contexts/AppContext';
+import useAppContext from '@/hooks/useAppContext';
 import BarcodeScanner from './BarcodeScanner';
 import { getDashboardData } from '@/services/dataService';
 import { Sale, Product, Customer } from '@/types';

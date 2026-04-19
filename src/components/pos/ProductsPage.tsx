@@ -6,7 +6,7 @@ import {
   updateProduct,
   deleteProduct, getCategories, uploadProductImage,
 } from '@/services/dataService';
-import { useAppContext } from '@/contexts/AppContext';
+import useAppContext from '@/hooks/useAppContext';
 import Modal from './Modal';
 import {
   Search,
@@ -123,9 +123,9 @@ const handleSave = async () => {
     setEditingProduct(null);
     setImageFile(null);
     setImagePreview(null);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Save error:', err);
-    alert(err?.message || 'Operation failed');
+    alert(err instanceof Error ? err.message : 'Operation failed');
   }
 };
 
@@ -139,9 +139,9 @@ try {
   setShowDeleteModal(false);
   setDeleteId(null);
 
-} catch (err: any) {
+} catch (err: unknown) {
   console.error('Delete error:', err);
-  alert(err?.message || 'Delete failed');
+  alert(err instanceof Error ? err.message : 'Delete failed');
 }
 };
 

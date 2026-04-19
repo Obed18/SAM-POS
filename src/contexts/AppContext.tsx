@@ -63,8 +63,7 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType>({} as AppContextType);
-
-export const useAppContext = () => useContext(AppContext);
+export default AppContext;
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ─── Navigation (not persisted) ───
