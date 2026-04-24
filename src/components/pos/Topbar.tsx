@@ -140,16 +140,16 @@ const Topbar: React.FC = () => {
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-medium text-slate-700 leading-tight">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
+              <p className="text-sm font-medium text-slate-700 leading-tight">{userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : ''}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
           </button>
           {showProfile && (
             <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden animate-in slide-in-from-top-2">
-              <div className="px-4 py-3 border-b border-slate-100">
-                <p className="text-sm font-semibold text-slate-800">{userRole.charAt(0).toUpperCase() + userRole.slice(1)}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{userEmail}</p>
-              </div>
+               <div className="px-4 py-3 border-b border-slate-100">
+                 <p className="text-sm font-semibold text-slate-800">{userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : ''}</p>
+                 <p className="text-xs text-slate-400 mt-0.5">{userEmail}</p>
+               </div>
               <div className="py-1">
                 <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 transition-colors">
                   <User className="w-4 h-4 text-slate-400" />

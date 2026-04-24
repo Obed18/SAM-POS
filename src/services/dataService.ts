@@ -216,6 +216,19 @@ export const getCategories = async (): Promise<Category[]> => {
   return data || [];
 };
 
+// ✅ AUTH
+export const verifyUserCredentials = async (
+  email: string,
+  password: string
+): Promise<{ role: 'admin' | 'cashier' } | null> => {
+  const { data, error } = await supabase.functions.invoke('verify-user', {
+    body: { email, password },
+  });
+
+  if (error || !data) return null;
+  return data as { role: 'admin' | 'cashier' } | null;
+};
+
 // ✅ RESET ALL DATA
 export const resetAllDatabaseData = async () => {
   const { error: salesError } = await supabase.from('sales').delete().neq('id', '');

@@ -10,6 +10,7 @@ import {
   clearAllStorage,
   updateLastModified,
 } from '@/hooks/useLocalStorage';
+import { verifyUserCredentials } from '@/services/dataService';
 
 interface AppContextType {
   // Navigation
@@ -75,7 +76,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
 
   // ─── Auth (persisted) ───
-  const [isAuthenticated, setIsAuthenticated] = useLocalStorage<boolean>('auth', true);
+  const [isAuthenticated, setIsAuthenticated] = useLocalStorage<boolean>('auth', false);
   const [userEmail, setUserEmail] = useLocalStorage<string>('userEmail', 'admin@posapp.com');
   const [userRole, setUserRole] = useLocalStorage<'admin' | 'cashier' | null>(
     'userRole',
@@ -114,29 +115,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string,
     role: 'admin' | 'cashier'
   ): Promise<boolean> => {
-    await new Promise((r) => setTimeout(r, 1500));
+    const user = await verifyUserCredentials(email, password);
 
-    const users = [
-      { email: 'admin@posapp.com', password: 'admin123', role: 'admin' },
-      { email: 'cashier@posapp.com', password: 'cashier123', role: 'cashier' },
-    ];
+    if (!user) {
+      showToast('error', 'Invalid email or password');
+      return false;
+    }
 
-    // 🔍 Step 1: Find user by email + password
-    const user = users.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (!user) return false;
-
-    // ⚠️ Step 2: Check role mismatch
     if (user.role !== role) {
       showToast('error', `You are registered as a ${user.role}, not ${role}`);
       return false;
     }
 
-    // ✅ Step 3: Login success
     setIsAuthenticated(true);
-    setUserEmail(user.email);
+    setUserEmail(email);
     setUserRole(user.role);
     setCurrentPage(
       user.role === 'admin' ? 'admin-dashboard' : 'cashier-dashboard'

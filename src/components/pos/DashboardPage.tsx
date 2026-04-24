@@ -179,7 +179,7 @@ const actions = [
       {/* Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {userRole.charAt(0).toUpperCase() + userRole.slice(1)}</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}</h1>
           <p className="text-slate-500 text-sm mt-0.5">Here's what's happening with your store today.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -358,7 +358,7 @@ const actions = [
       {/* Quick Actions */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {actions
-            .filter(action => action.roles.includes(userRole))
+            .filter(action => userRole && action.roles.includes(userRole))
             .map((action) => {
               const Icon = action.icon;
               return (
