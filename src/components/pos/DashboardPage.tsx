@@ -3,6 +3,7 @@ import { useAppContext } from '@/contexts/AppContext';
 import BarcodeScanner from './BarcodeScanner';
 import { getDashboardData } from '@/services/dataService';
 import { Sale, Product, Customer } from '@/types';
+import { formatRole } from '@/lib/stringUtils';
 import {
   TrendingUp,
   TrendingDown,
@@ -179,7 +180,7 @@ const actions = [
       {/* Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {formatRole(userRole) || 'User'}</h1>
           <p className="text-slate-500 text-sm mt-0.5">Here's what's happening with your store today.</p>
         </div>
         <div className="flex items-center gap-3">

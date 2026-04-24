@@ -1,6 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseConfig } from '@/lib/envValidator'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string
+let supabase: any = null
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+try {
+  const { url, key } = getSupabaseConfig()
+  supabase = createClient(url, key)
+} catch (error) {
+  console.error('Failed to initialize Supabase:', error)
+  // Create a dummy client to prevent runtime errors
+  // Users will see an error message in the UI
+  supabase = createClient('https://dummy.supabase.co', 'dummy-key')
+}
+
+export { supabase }
